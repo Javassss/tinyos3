@@ -33,7 +33,6 @@
   @{ 
 */
 
-
 /**
   @brief The device-specific file operations table.
 

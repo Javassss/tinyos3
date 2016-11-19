@@ -83,7 +83,6 @@ serial_dcb_t serial_dcb[MAX_TERMINALS];
 void serial_rx_handler()
 {
   int pre = preempt_off;
-
   /* 
     We do not know which terminal is
     ready, so we must signal them all !
@@ -100,13 +99,14 @@ void serial_rx_handler()
 /*
   Read from the device, sleeping if needed.
  */
+
 int serial_read(void* dev, char *buf, unsigned int size)
 {
   serial_dcb_t* dcb = (serial_dcb_t*)dev;
 
   preempt_off;            /* Stop preemption */
   Mutex_Lock(& dcb->spinlock);
-
+  
   uint count =  0;
 
   while(count<size) {
@@ -114,6 +114,7 @@ int serial_read(void* dev, char *buf, unsigned int size)
     
     if (valid) {
       count++;
+      flag_read = 1;
     }
     else if(count==0) {
       Cond_Wait(&dcb->spinlock, &dcb->rx_ready);
@@ -146,16 +147,16 @@ void serial_tx_handler()
 int serial_write(void* dev, const char* buf, unsigned int size)
 {
   serial_dcb_t* dcb = (serial_dcb_t*)dev;
-
   unsigned int count = 0;
   while(count < size) {
     int success = bios_write_serial(dcb->devno, buf[count] );
 
     if(success) {
       count++;
+      flag_write = 1;
     } 
     else if(count==0)
-    {
+    { 
       yield();
     }
     else

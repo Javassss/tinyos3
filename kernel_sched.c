@@ -144,9 +144,10 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
   TCB* tcb = (TCB*) allocate_thread(THREAD_SIZE);
 
   /* Set the owner */
-  tcb->owner_pcb = pcb;
-
+  tcb->owner_pcb = pcb;	
   /* Initialize the other attributes */
+  tcb->priority = PRIORITY_INIT;      				//jv
+  tcb->alarmed = NOT_ALARMED;		
   tcb->type = NORMAL_THREAD;
   tcb->state = INIT;
   tcb->phase = CTX_CLEAN;
@@ -218,13 +219,14 @@ CCB cctx[MAX_CORES];
 */
 
 
-rlnode SCHED;                         /* The scheduler queue */
+//rlnode SCHED;                         /* The scheduler queue */
 Mutex sched_spinlock = MUTEX_INIT;    /* spinlock for scheduler queue */
-
 
 /* Interrupt handler for ALARM */
 void yield_handler()
-{
+{ 
+  TCB* current = CURTHREAD;
+  current->alarmed = ALARMED;
   yield();
 }
 
@@ -242,8 +244,9 @@ void ici_handler()
 void sched_queue_add(TCB* tcb)
 {
   /* Insert at the end of the scheduling list */
-  Mutex_Lock(& sched_spinlock);
-  rlist_push_back(& SCHED, & tcb->sched_node);
+  Mutex_Lock(& sched_spinlock);					//jv
+  int prty = tcb->priority;
+  rlist_push_back( multilevel_sched + prty, & tcb->sched_node );
   Mutex_Unlock(& sched_spinlock);
 
   /* Restart possibly halted cores */
@@ -256,9 +259,15 @@ void sched_queue_add(TCB* tcb)
   return it. Return NULL if the list is empty.
 */
 TCB* sched_queue_select()
-{
-  Mutex_Lock(& sched_spinlock);
-  rlnode * sel = rlist_pop_front(& SCHED);
+{				
+  Mutex_Lock(& sched_spinlock);		
+  int level_cnt=1;					//jv
+  rlnode* list_level = multilevel_sched;
+  while( level_cnt < SCHED_LEVELS && is_rlist_empty(list_level) ){
+	level_cnt++;
+  	list_level++;
+  }
+  rlnode * sel = rlist_pop_front(list_level);
   Mutex_Unlock(& sched_spinlock);
 
   return sel->tcb;  /* When the list is empty, this is NULL */
@@ -355,6 +364,32 @@ void yield()
       assert(0);  /* It should not be READY or EXITED ! */
   }
   Mutex_Unlock(& current->state_spinlock);
+  
+  /** PRIORITY COMPUTING */
+  							//jv
+  /** Only for non-base priorities
+  	  -- When quantum completes, priority decreases by 1 */
+  if( current->type != IDLE_THREAD && current->alarmed == ALARMED 
+  			&& current->priority < PRIORITY_MIN )
+  {
+  	current->priority++;  	 /** Decrease priority of current thread*/
+ 	current->alarmed = NOT_ALARMED;
+  }
+  
+  /** When current thread is I/O bound , priority increases by 1
+      -- Check if flag is "raised" from 'serial_read' in kernel_dev.c */ 
+
+  if( (current->type != IDLE_THREAD && current->priority > PRIORITY_MAX
+  							&& current->alarmed == NOT_ALARMED) 
+  							&& (flag_read || flag_write) )
+  {
+  	current->priority--;
+  }
+  flag_read = 0;
+  flag_write = 0;
+
+  fprintf(stderr,"list 1: %d - list 2: %d - list 3: %d\n",
+  rlist_len(multilevel_sched),rlist_len(multilevel_sched+1),rlist_len(multilevel_sched+2));
 
   /* Get next */
   TCB* next = sched_queue_select();
@@ -460,8 +495,13 @@ static void idle_thread()
   Initialize the scheduler queue
  */
 void initialize_scheduler()
-{
-  rlnode_init(&SCHED, NULL);
+{ 
+  int i;
+  rlnode* level;						//jv
+  for (i=0;i<SCHED_LEVELS;i++){
+        level = multilevel_sched+i;
+  	rlnode_init(level, NULL);
+  }
 }
 
 
@@ -479,6 +519,8 @@ void run_scheduler()
   curcore->idle_thread.type = IDLE_THREAD;
   curcore->idle_thread.state = RUNNING;
   curcore->idle_thread.phase = CTX_DIRTY;
+  curcore->idle_thread.priority = PRIORITY_INIT;    //jv
+  curcore->idle_thread.alarmed = NOT_ALARMED;
   curcore->idle_thread.state_spinlock = MUTEX_INIT;
   rlnode_init(& curcore->idle_thread.sched_node, & curcore->idle_thread);
 

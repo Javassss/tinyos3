@@ -68,11 +68,27 @@ typedef enum {
   An object of this type is associated to every thread. In this object
   are stored all the metadata that relate to the thread.
 */
+
+int flag_read;
+int flag_write;
+#define SCHED_LEVELS 3
+#define PRIORITY_MIN (SCHED_LEVELS-1)
+#define PRIORITY_MAX 0
+#define PRIORITY_INIT 1
+#define NOT_ALARMED 0
+#define ALARMED 1
+   	
 typedef struct thread_control_block
 {
   PCB* owner_pcb;       /**< This is null for a free TCB */
 
   ucontext_t context;     /**< The thread context */
+
+  int priority;   	/**< Priority of thread in the scheduler 
+			                  0 for highest priority
+			     SCHED_LEVELS-1 for lowest    >>  */  		//jv
+  int alarmed; 		/** Used in 'yield' when called from 'yield_handler' 
+		            after ALARM interrupt */
 
 #ifndef NVALGRIND
   unsigned valgrind_stack_id; /**< This is useful in order to register the thread stack to valgrind */
@@ -107,6 +123,9 @@ typedef struct thread_control_block
  *
  ************************/
 
+/** Multilevel Feedback Queues with each queue implemented with rlnode list */
+						                                  //jv
+rlnode multilevel_sched[SCHED_LEVELS];
 
 /** @brief Core control block.
 
