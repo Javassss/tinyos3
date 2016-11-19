@@ -39,7 +39,7 @@ void boot_tinyos_kernel()
     initialize_devices();
     initialize_files();
     initialize_scheduler();
-
+	
     /* The boot task is executed normally! */
     if(Exec(boot_rec.init_task, boot_rec.argl, boot_rec.args)!=1)
       FATAL("The init process does not have PID==1");

@@ -100,6 +100,9 @@ void serial_rx_handler()
 /*
   Read from the device, sleeping if needed.
  */
+
+int flag_read = 0;
+
 int serial_read(void* dev, char *buf, unsigned int size)
 {
   serial_dcb_t* dcb = (serial_dcb_t*)dev;
