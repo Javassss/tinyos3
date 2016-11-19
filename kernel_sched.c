@@ -365,18 +365,32 @@ void yield()
   }
   Mutex_Unlock(& current->state_spinlock);
   
-  /** Priority computing */
+  /** PRIORITY COMPUTING */
   							//jv
-  /** Only for non-base priorities */
-  if( current->type != IDLE_THREAD && current->alarmed == ALARMED && current->priority < 										SCHED_LEVELS-1 ){
-  	current->priority++;  	 /** Decrease priority of current 							     		thread*/
+  /** Only for non-base priorities
+  	  -- When quantum completes, priority decreases by 1 */
+  if( current->type != IDLE_THREAD && current->alarmed == ALARMED 
+  			&& current->priority < PRIORITY_MIN )
+  {
+  	current->priority++;  	 /** Decrease priority of current thread*/
  	current->alarmed = NOT_ALARMED;
   }
   
-  //if( current->thread_func == (void (*)())bios_read_serial ){
-  //	fprintf(stderr,"ok");
-  //}
-  
+  /** When current thread is I/O bound , priority increases by 1
+      -- Check if flag is "raised" from 'serial_read' in kernel_dev.c */ 
+
+  if( (current->type != IDLE_THREAD && current->priority > PRIORITY_MAX
+  							&& current->alarmed == NOT_ALARMED) 
+  							&& (flag_read || flag_write) )
+  {
+  	current->priority--;
+  }
+  flag_read = 0;
+  flag_write = 0;
+
+  fprintf(stderr,"list 1: %d - list 2: %d - list 3: %d\n",
+  rlist_len(multilevel_sched),rlist_len(multilevel_sched+1),rlist_len(multilevel_sched+2));
+
   /* Get next */
   TCB* next = sched_queue_select();
 

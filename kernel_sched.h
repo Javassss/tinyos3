@@ -69,7 +69,12 @@ typedef enum {
   are stored all the metadata that relate to the thread.
 */
 
-#define PRIORITY_INIT 0
+int flag_read;
+int flag_write;
+#define SCHED_LEVELS 3
+#define PRIORITY_MIN (SCHED_LEVELS-1)
+#define PRIORITY_MAX 0
+#define PRIORITY_INIT 1
 #define NOT_ALARMED 0
 #define ALARMED 1
    	
@@ -119,8 +124,7 @@ typedef struct thread_control_block
  ************************/
 
 /** Multilevel Feedback Queues with each queue implemented with rlnode list */
-#define SCHED_LEVELS 3
-						//jv
+						                                  //jv
 rlnode multilevel_sched[SCHED_LEVELS];
 
 /** @brief Core control block.
